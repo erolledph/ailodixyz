@@ -13,6 +13,36 @@ interface CMSSettings {
   defaultStatus: 'draft' | 'published';
 }
 
+// Helper function to normalize data from external sources
+function normalizeContentData(rawData: any[]): BlogPost[] {
+  return rawData.map((item: any) => ({
+    ...item,
+    categories: Array.isArray(item.categories) 
+      ? item.categories 
+      : typeof item.categories === 'string' 
+        ? item.categories.split(',').map((c: string) => c.trim()).filter(Boolean)
+        : [],
+    tags: Array.isArray(item.tags) 
+      ? item.tags 
+      : typeof item.tags === 'string' 
+        ? item.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+        : [],
+    keywords: Array.isArray(item.keywords) 
+      ? item.keywords 
+      : typeof item.keywords === 'string' 
+        ? item.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+        : [],
+    // Ensure other required fields have defaults
+    metaDescription: item.metaDescription || '',
+    seoTitle: item.seoTitle || item.title || '',
+    author: item.author || '',
+    featuredImageUrl: item.featuredImageUrl || '',
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    publishDate: item.publishDate || new Date().toISOString(),
+  })) as BlogPost[];
+}
+
 export default function CMSAdminPage() {
   const router = useRouter();
   const [contentData, setContentData] = useState<BlogPost[]>([]);
@@ -105,8 +135,10 @@ export default function CMSAdminPage() {
       setLoading(true);
       const response = await fetch('/api/cms/content');
       if (response.ok) {
-        const data = await response.json();
-        setContentData(data);
+        const rawData = await response.json();
+        // Normalize the data to ensure type consistency
+        const normalizedData = normalizeContentData(rawData);
+        setContentData(normalizedData);
       } else {
         console.warn('Could not load content, starting with empty data');
         setContentData([]);
@@ -388,14 +420,11 @@ export default function CMSAdminPage() {
     );
   }
 
-  // Statistics
+  // Statistics - Now using properly typed arrays
   const totalContent = contentData.length;
   const publishedContent = contentData.filter(item => item.status === 'published').length;
   const draftContent = contentData.filter(item => item.status === 'draft').length;
-  const allCategories = contentData.flatMap(item => 
-    Array.isArray(item.categories) ? item.categories : 
-    typeof item.categories === 'string' ? item.categories.split(',').map(c => c.trim()) : []
-  );
+  const allCategories = contentData.flatMap(item => item.categories);
   const uniqueCategories = [...new Set(allCategories)].length;
 
   return (
