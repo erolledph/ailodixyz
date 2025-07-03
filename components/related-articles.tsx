@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { format } from 'date-fns';
 import { Clock, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { getAllContent } from '@/lib/content';
 import type { BlogPost } from '@/types/blog';
 
 interface RelatedArticlesProps {
@@ -20,8 +21,7 @@ export function RelatedArticles({ currentPostId, categories = [] }: RelatedArtic
   useEffect(() => {
     async function fetchRelatedPosts() {
       try {
-        const response = await fetch('https://blogform.netlify.app/api/content.json');
-        const data = await response.json();
+        const data = await getAllContent();
         
         let filteredPosts = data.filter((post: BlogPost) => 
           post.status === 'published' && post.id !== currentPostId

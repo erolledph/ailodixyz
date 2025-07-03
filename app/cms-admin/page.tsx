@@ -629,8 +629,12 @@ export default function CMSAdminPage() {
                                 alt={item.title} 
                                 className={styles.contentImage}
                                 onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  e.currentTarget.nextElementSibling!.style.display = 'flex';
+                                  const target = e.currentTarget as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const nextSibling = target.nextElementSibling as HTMLElement | null;
+                                  if (nextSibling) {
+                                    nextSibling.style.display = 'flex';
+                                  }
                                 }}
                               />
                             ) : null}

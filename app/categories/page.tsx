@@ -8,6 +8,7 @@ import { FolderOpen, FileText, Filter } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EnhancedBlogCard } from '@/components/enhanced-blog-card';
+import { getAllContent } from '@/lib/content';
 import type { BlogPost } from '@/types/blog';
 
 interface CategoryData {
@@ -28,9 +29,7 @@ function CategoriesPageContent() {
   useEffect(() => {
     async function fetchCategories() {
       try {
-        const response = await fetch('https://blogform.netlify.app/api/content.json');
-        const data = await response.json();
-        const publishedPosts = data.filter((post: BlogPost) => post.status === 'published');
+        const publishedPosts = await getAllContent();
         
         const categoryMap = new Map<string, BlogPost[]>();
         

@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// Configuration
-const API_URL = 'https://blogform.netlify.app/api/content.json';
+// Configuration - Use environment variable for API URL
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ailodixyz.erolledph.workers.dev/cms/data/content.json';
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ailodi.xyz';
 const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || 'AI Lodi';
 const SITE_DESCRIPTION = process.env.NEXT_PUBLIC_SITE_DESCRIPTION || 'AI Lodi is your ultimate guide to modern technology, AI breakthroughs, programming trends, and future science.';
@@ -114,7 +114,14 @@ function generateSitemap(posts) {
   });
 
   // Category pages
-  const categoriesArray = posts.flatMap(post => post.categories || []);
+  const categoriesArray = posts.flatMap(post => {
+    if (Array.isArray(post.categories)) {
+      return post.categories;
+    } else if (typeof post.categories === 'string') {
+      return post.categories.split(',').map(c => c.trim()).filter(Boolean);
+    }
+    return [];
+  });
   const categories = Array.from(new Set(categoriesArray));
   const categoryPages = categories.map((category) => ({
     url: `${BASE_URL}/categories/?filter=${encodeURIComponent(category)}`,
@@ -167,7 +174,14 @@ function generateRSSFeed(posts) {
       <width>512</width>
       <height>512</height>
     </image>
-    ${latestPosts.map(post => `
+    ${latestPosts.map(post => {
+      const categories = Array.isArray(post.categories) 
+        ? post.categories 
+        : typeof post.categories === 'string' 
+          ? post.categories.split(',').map(c => c.trim()).filter(Boolean)
+          : [];
+      
+      return `
     <item>
       <title><![CDATA[${post.title}]]></title>
       <description><![CDATA[${post.metaDescription}]]></description>
@@ -176,9 +190,10 @@ function generateRSSFeed(posts) {
       <guid isPermaLink="true">${BASE_URL}/post/${post.slug}/</guid>
       <pubDate>${new Date(post.publishDate).toUTCString()}</pubDate>
       <dc:creator><![CDATA[${post.author}]]></dc:creator>
-      ${(post.categories || []).map(category => `<category><![CDATA[${category}]]></category>`).join('')}
+      ${categories.map(category => `<category><![CDATA[${category}]]></category>`).join('')}
       ${post.featuredImageUrl ? `<enclosure url="${post.featuredImageUrl}" type="image/jpeg"/>` : ''}
-    </item>`).join('')}
+    </item>`;
+    }).join('')}
   </channel>
 </rss>`;
 
@@ -189,6 +204,7 @@ function generateRSSFeed(posts) {
 async function generateMetadata() {
   try {
     console.log('🔄 BUILD: Starting metadata generation with enhanced cache busting...');
+    console.log('🔄 BUILD: Using API URL:', API_URL);
     console.log('🔄 BUILD: Build environment:', {
       commit: process.env.CF_PAGES_COMMIT_SHA || 'local',
       branch: process.env.CF_PAGES_BRANCH || 'local',
@@ -237,7 +253,8 @@ async function generateMetadata() {
       postsCount: publishedPosts.length,
       posts: publishedPosts.map(p => ({ title: p.title, slug: p.slug, updatedAt: p.updatedAt })),
       commit: process.env.CF_PAGES_COMMIT_SHA || 'local',
-      branch: process.env.CF_PAGES_BRANCH || 'local'
+      branch: process.env.CF_PAGES_BRANCH || 'local',
+      apiUrl: API_URL
     };
     fs.writeFileSync(path.join(publicDir, 'build-info.json'), JSON.stringify(buildInfo, null, 2), 'utf8');
     console.log('📋 BUILD: build-info.json generated for debugging');
