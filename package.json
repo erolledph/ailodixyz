@@ -12,6 +12,8 @@
     "lint": "next lint",
     "preview": "npm run build && wrangler pages dev",
     "deploy": "npm run build && wrangler deploy",
+    "deploy:production": "npm run build && wrangler deploy --env production",
+    "deploy:preview": "npm run build && wrangler deploy --env preview",
     "generate-metadata": "node scripts/generate-metadata.js",
     "clean": "rm -rf .next out public/sitemap.xml public/feed.xml public/build-info.json",
     "fresh-build": "npm run clean && npm run build",

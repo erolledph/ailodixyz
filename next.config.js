@@ -1,5 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable static export for Cloudflare Pages deployment
+  output: 'export',
+  
+  // Disable image optimization for static export
+  images: {
+    unoptimized: true,
+  },
+  
+  // Ensure trailing slashes for static export
+  trailingSlash: true,
+  
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -16,7 +27,7 @@ const nextConfig = {
     pagesBufferLength: 0,
   },
   
-  // Image optimization configuration for Cloudflare
+  // Image optimization configuration for static export
   images: {
     unoptimized: true, // Required for static export
     formats: ['image/webp', 'image/avif'],
@@ -40,9 +51,9 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   
-  // Webpack optimizations for Cloudflare Workers
+  // Webpack optimizations for static export
   webpack: (config, { dev, isServer }) => {
-    // Optimize bundle size for edge runtime
+    // Optimize bundle size for static export
     if (!dev && !isServer) {
       config.optimization.splitChunks = {
         chunks: 'all',
@@ -56,7 +67,7 @@ const nextConfig = {
       };
     }
     
-    // Ensure compatibility with Cloudflare Workers
+    // Ensure compatibility with static export
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
