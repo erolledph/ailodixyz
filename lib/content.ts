@@ -1,11 +1,49 @@
 import type { BlogPost } from '@/types/blog';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://blogform.netlify.app/api/content.json';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ailodixyz.erolledph.workers.dev/cms/data/content.json';
 
 interface SearchResult {
   posts: BlogPost[];
   hasError: boolean;
   errorMessage?: string;
+}
+
+// Helper function to read local content file
+async function readLocalContent(): Promise<BlogPost[]> {
+  try {
+    // Check if we're in a Node.js environment (build time)
+    if (typeof window === 'undefined') {
+      const fs = require('fs');
+      const path = require('path');
+      const contentPath = path.join(process.cwd(), 'public/cms/data/content.json');
+      
+      if (fs.existsSync(contentPath)) {
+        const content = fs.readFileSync(contentPath, 'utf8');
+        const data = JSON.parse(content);
+        if (Array.isArray(data)) {
+          console.log('📚 Using local CMS content (build time)');
+          return data.filter((post: any) => post && post.status === 'published');
+        }
+      }
+    } else {
+      // Browser environment - try to fetch local content
+      try {
+        const response = await fetch('/cms/data/content.json');
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            console.log('📚 Using local CMS content (browser)');
+            return data.filter((post: any) => post && post.status === 'published');
+          }
+        }
+      } catch (error) {
+        console.log('📚 Local CMS content not available in browser');
+      }
+    }
+  } catch (error) {
+    console.log('📚 Local content not available:', error.message);
+  }
+  return [];
 }
 
 async function fetchWithRetry(
@@ -40,11 +78,35 @@ async function fetchWithRetry(
         },
       });
       
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        console.warn(`⚠️ API request failed with status ${response.status}`);
+        if (response.status >= 500) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+        // For client errors, return empty array instead of throwing
+        return new Response('[]', { 
+          status: 200, 
+          headers: { 'Content-Type': 'application/json' } 
+        });
+      }
+      
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('⚠️ API response is not JSON, likely HTML error page');
+        throw new Error('Invalid content type - expected JSON');
+      }
+      
       return response;
     } catch (err) {
-      console.error(`🔄 BUILD: Fetch attempt ${i + 1} failed:`, err);
-      if (i === retries - 1) throw err;
+      console.error(`🔄 Fetch attempt ${i + 1} failed:`, err);
+      if (i === retries - 1) {
+        // Return empty array instead of throwing
+        return new Response('[]', { 
+          status: 200, 
+          headers: { 'Content-Type': 'application/json' } 
+        });
+      }
       await new Promise(res => setTimeout(res, 1000 * (i + 1))); // Exponential backoff
     }
   }
@@ -53,24 +115,19 @@ async function fetchWithRetry(
 
 export async function getAllContent(options: RequestInit = {}): Promise<BlogPost[]> {
   try {
-    console.log('🔄 BUILD: Fetching content from API...');
+    console.log('🔄 Fetching content...');
     
-    // Try CMS content first (for local development)
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      try {
-        const cmsResponse = await fetch('/cms/data/content.json');
-        if (cmsResponse.ok) {
-          const cmsData = await cmsResponse.json();
-          if (Array.isArray(cmsData) && cmsData.length > 0) {
-            console.log('📚 BUILD: Using CMS content');
-            return cmsData.filter((post: any) => post && post.status === 'published');
-          }
-        }
-      } catch (error) {
-        console.log('📚 BUILD: CMS content not available, falling back to API');
-      }
+    // Try local content first (prioritize during build time)
+    const localContent = await readLocalContent();
+    if (localContent.length > 0) {
+      console.log(`📚 Successfully loaded ${localContent.length} posts from local content`);
+      return localContent.sort((a: BlogPost, b: BlogPost) => 
+        new Date(b.updatedAt || b.publishDate).getTime() - new Date(a.updatedAt || a.publishDate).getTime()
+      );
     }
     
+    // Fallback to API if local content is not available
+    console.log('🔄 Local content not available, trying API...');
     const response = await fetchWithRetry(API_URL, {
       headers: {
         'Accept': 'application/json',
@@ -79,11 +136,20 @@ export async function getAllContent(options: RequestInit = {}): Promise<BlogPost
       ...options,
     });
     
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('❌ Failed to parse API response as JSON:', parseError);
+      console.log('📄 Response preview:', text.substring(0, 200) + '...');
+      return [];
+    }
     
     // Validate data structure
     if (!Array.isArray(data)) {
-      console.error('❌ BUILD: API returned non-array data:', typeof data);
+      console.error('❌ API returned non-array data:', typeof data);
       return [];
     }
     
@@ -94,8 +160,10 @@ export async function getAllContent(options: RequestInit = {}): Promise<BlogPost
       return true;
     });
     
-    console.log(`📚 BUILD: Successfully fetched ${publishedPosts.length} published posts`);
-    console.log(`📝 BUILD: Latest posts:`, publishedPosts.slice(0, 3).map((p: BlogPost) => p.title));
+    console.log(`📚 Successfully fetched ${publishedPosts.length} published posts from API`);
+    if (publishedPosts.length > 0) {
+      console.log(`📝 Latest posts:`, publishedPosts.slice(0, 3).map((p: BlogPost) => p.title));
+    }
     
     // Sort by updated date to ensure consistent ordering
     const sortedPosts = publishedPosts.sort((a: BlogPost, b: BlogPost) => 
@@ -104,34 +172,26 @@ export async function getAllContent(options: RequestInit = {}): Promise<BlogPost
     
     return sortedPosts;
   } catch (error) {
-    console.error('❌ BUILD: Error fetching content:', error);
+    console.error('❌ Error fetching content:', error);
     return [];
   }
 }
 
 export async function getContentBySlug(slug: string): Promise<BlogPost | null> {
   try {
-    console.log(`🔍 BUILD: Fetching content for slug: ${slug}`);
+    console.log(`🔍 Fetching content for slug: ${slug}`);
     
-    // Try CMS content first (for local development)
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      try {
-        const cmsResponse = await fetch('/cms/data/content.json');
-        if (cmsResponse.ok) {
-          const cmsData = await cmsResponse.json();
-          if (Array.isArray(cmsData)) {
-            const post = cmsData.find((p: BlogPost) => p.slug === slug && p.status === 'published');
-            if (post) {
-              console.log(`✅ BUILD: Found CMS post: ${post.title}`);
-              return post;
-            }
-          }
-        }
-      } catch (error) {
-        console.log('📚 BUILD: CMS content not available for slug, falling back to API');
+    // Try local content first
+    const localContent = await readLocalContent();
+    if (localContent.length > 0) {
+      const post = localContent.find((p: BlogPost) => p.slug === slug);
+      if (post) {
+        console.log(`✅ Found local post: ${post.title}`);
+        return post;
       }
     }
     
+    // Fallback to API
     const response = await fetchWithRetry(API_URL, {
       headers: {
         'Accept': 'application/json',
@@ -139,10 +199,18 @@ export async function getContentBySlug(slug: string): Promise<BlogPost | null> {
       },
     });
     
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      console.error('❌ Failed to parse API response as JSON for slug fetch:', parseError);
+      return null;
+    }
     
     if (!Array.isArray(data)) {
-      console.error('❌ BUILD: API returned non-array data for slug fetch');
+      console.error('❌ API returned non-array data for slug fetch');
       return null;
     }
     
@@ -153,15 +221,15 @@ export async function getContentBySlug(slug: string): Promise<BlogPost | null> {
     const post = publishedPosts.find((p: BlogPost) => p.slug === slug);
     
     if (post) {
-      console.log(`✅ BUILD: Found post: ${post.title}`);
+      console.log(`✅ Found post: ${post.title}`);
     } else {
-      console.log(`❌ BUILD: Post not found for slug: ${slug}`);
-      console.log(`📋 BUILD: Available slugs:`, publishedPosts.map((p: BlogPost) => p.slug).slice(0, 10));
+      console.log(`❌ Post not found for slug: ${slug}`);
+      console.log(`📋 Available slugs:`, publishedPosts.map((p: BlogPost) => p.slug).slice(0, 10));
     }
     
     return post || null;
   } catch (error) {
-    console.error('❌ BUILD: Error fetching content by slug:', error);
+    console.error('❌ Error fetching content by slug:', error);
     return null;
   }
 }

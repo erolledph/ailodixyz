@@ -10,10 +10,6 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
   
-  // Enable static export for Cloudflare Workers compatibility
-  output: 'export',
-  trailingSlash: true,
-  
   // Disable caching during build for fresh content
   onDemandEntries: {
     maxInactiveAge: 0,
@@ -33,7 +29,8 @@ const nextConfig = {
       'cdn.jsdelivr.net',
       'via.placeholder.com',
       'api.dicebear.com',
-      'blogform.netlify.app'
+      'blogform.netlify.app',
+      'ailodixyz.erolledph.workers.dev'
     ],
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
@@ -43,9 +40,9 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
   
-  // Webpack optimizations
+  // Webpack optimizations for Cloudflare Workers
   webpack: (config, { dev, isServer }) => {
-    // Optimize bundle size
+    // Optimize bundle size for edge runtime
     if (!dev && !isServer) {
       config.optimization.splitChunks = {
         chunks: 'all',
@@ -58,6 +55,14 @@ const nextConfig = {
         },
       };
     }
+    
+    // Ensure compatibility with Cloudflare Workers
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: false,
+    };
     
     return config;
   },

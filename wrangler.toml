@@ -1,5 +1,5 @@
 # wrangler.toml
-name = 'ailodi'
+name = 'ailodi-blog'
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -8,7 +8,16 @@ directory = "./out"
 not_found_handling = "single-page-application"
 
 [env.production]
-name = "ai-lodi-blog"
+name = "ailodi-blog-production"
 
 [env.preview]
-name = "ai-lodi-blog-preview"
+name = "ailodi-blog-preview"
+
+# Build configuration
+[build]
+command = "npm run build"
+cwd = "."
+
+# Environment variables for build
+[vars]
+NODE_ENV = "production"
