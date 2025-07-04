@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { marked } from 'marked';
 import styles from './cms.module.css';
 import type { BlogPost } from '@/types/blog';
@@ -44,15 +43,14 @@ function normalizeContentData(rawData: any[]): BlogPost[] {
 }
 
 export default function CMSAdminPage() {
-  const router = useRouter();
   const [contentData, setContentData] = useState<BlogPost[]>([]);
   const [filteredData, setFilteredData] = useState<BlogPost[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(true); // Simplified for static export
+  const [checkingAuth, setCheckingAuth] = useState(false);
   
   const [settings, setSettings] = useState<CMSSettings>({
     siteTitle: 'AI Lodi CMS',
@@ -80,37 +78,11 @@ export default function CMSAdminPage() {
     search: ''
   });
 
-  // Check authentication status
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const response = await fetch('/api/auth/status');
-      const data = await response.json();
-      setIsAuthenticated(data.authenticated);
-      
-      if (!data.authenticated) {
-        router.push('/api/auth/github/login');
-        return;
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      router.push('/api/auth/github/login');
-      return;
-    } finally {
-      setCheckingAuth(false);
-    }
-  };
-
   // Load content data
   useEffect(() => {
-    if (isAuthenticated) {
-      loadContentData();
-      loadSettings();
-    }
-  }, [isAuthenticated]);
+    loadContentData();
+    loadSettings();
+  }, []);
 
   // Auto-generate slug from title
   useEffect(() => {
@@ -133,14 +105,13 @@ export default function CMSAdminPage() {
   const loadContentData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/cms/content');
-      if (response.ok) {
-        const rawData = await response.json();
-        // Normalize the data to ensure type consistency
+      // For static export, we'll load from local storage or show empty state
+      const savedData = localStorage.getItem('cms-content-data');
+      if (savedData) {
+        const rawData = JSON.parse(savedData);
         const normalizedData = normalizeContentData(rawData);
         setContentData(normalizedData);
       } else {
-        console.warn('Could not load content, starting with empty data');
         setContentData([]);
       }
     } catch (error) {
@@ -226,18 +197,8 @@ export default function CMSAdminPage() {
         updatedData = [...contentData, contentItem];
       }
 
-      // Save to GitHub
-      const response = await fetch('/api/cms/content', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save content');
-      }
+      // Save to localStorage for static export
+      localStorage.setItem('cms-content-data', JSON.stringify(updatedData));
 
       setContentData(updatedData);
       resetForm();
@@ -280,17 +241,8 @@ export default function CMSAdminPage() {
     try {
       const updatedData = contentData.filter(item => item.id !== id);
       
-      const response = await fetch('/api/cms/content', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete content');
-      }
+      // Save to localStorage for static export
+      localStorage.setItem('cms-content-data', JSON.stringify(updatedData));
 
       setContentData(updatedData);
       showNotification('Content deleted successfully!', 'success');
@@ -394,32 +346,6 @@ export default function CMSAdminPage() {
     showNotification('Content exported successfully!', 'success');
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
-
-  if (checkingAuth) {
-    return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.spinner}></div>
-        <p>Checking authentication...</p>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className={styles.loadingContainer}>
-        <p>Redirecting to login...</p>
-      </div>
-    );
-  }
-
   // Statistics - Now using properly typed arrays
   const totalContent = contentData.length;
   const publishedContent = contentData.filter(item => item.status === 'published').length;
@@ -438,12 +364,9 @@ export default function CMSAdminPage() {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <button 
-            onClick={handleLogout}
-            className={`${styles.btn} ${styles.btnSecondary}`}
-          >
-            Logout
-          </button>
+          <div className="text-sm text-muted-foreground">
+            Static CMS Mode
+          </div>
         </div>
       </header>
 
