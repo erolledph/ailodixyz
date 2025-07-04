@@ -8,6 +8,17 @@ interface SearchResult {
   errorMessage?: string;
 }
 
+// Helper function to safely get error message
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error occurred';
+}
+
 // Helper function to read local content file
 async function readLocalContent(): Promise<BlogPost[]> {
   try {
@@ -41,7 +52,7 @@ async function readLocalContent(): Promise<BlogPost[]> {
       }
     }
   } catch (error) {
-    console.log('📚 Local content not available:', error.message);
+    console.log('📚 Local content not available:', getErrorMessage(error));
   }
   return [];
 }
@@ -99,7 +110,7 @@ async function fetchWithRetry(
       
       return response;
     } catch (err) {
-      console.error(`🔄 Fetch attempt ${i + 1} failed:`, err);
+      console.error(`🔄 Fetch attempt ${i + 1} failed:`, getErrorMessage(err));
       if (i === retries - 1) {
         // Return empty array instead of throwing
         return new Response('[]', { 
@@ -142,7 +153,7 @@ export async function getAllContent(options: RequestInit = {}): Promise<BlogPost
     try {
       data = JSON.parse(text);
     } catch (parseError) {
-      console.error('❌ Failed to parse API response as JSON:', parseError);
+      console.error('❌ Failed to parse API response as JSON:', getErrorMessage(parseError));
       console.log('📄 Response preview:', text.substring(0, 200) + '...');
       return [];
     }
@@ -172,7 +183,7 @@ export async function getAllContent(options: RequestInit = {}): Promise<BlogPost
     
     return sortedPosts;
   } catch (error) {
-    console.error('❌ Error fetching content:', error);
+    console.error('❌ Error fetching content:', getErrorMessage(error));
     return [];
   }
 }
@@ -205,7 +216,7 @@ export async function getContentBySlug(slug: string): Promise<BlogPost | null> {
     try {
       data = JSON.parse(text);
     } catch (parseError) {
-      console.error('❌ Failed to parse API response as JSON for slug fetch:', parseError);
+      console.error('❌ Failed to parse API response as JSON for slug fetch:', getErrorMessage(parseError));
       return null;
     }
     
@@ -229,7 +240,7 @@ export async function getContentBySlug(slug: string): Promise<BlogPost | null> {
     
     return post || null;
   } catch (error) {
-    console.error('❌ Error fetching content by slug:', error);
+    console.error('❌ Error fetching content by slug:', getErrorMessage(error));
     return null;
   }
 }
@@ -239,7 +250,7 @@ export async function getPostsByCategory(category: string): Promise<BlogPost[]> 
     const posts = await getAllContent();
     return posts.filter(post => post.categories.includes(category));
   } catch (error) {
-    console.error('Error fetching posts by category:', error);
+    console.error('Error fetching posts by category:', getErrorMessage(error));
     return [];
   }
 }
@@ -401,11 +412,11 @@ export async function searchPosts(query: string): Promise<SearchResult> {
       hasError: false
     };
   } catch (error) {
-    console.error('❌ SEARCH DEBUG: Error in searchPosts:', error);
+    console.error('❌ SEARCH DEBUG: Error in searchPosts:', getErrorMessage(error));
     return {
       posts: [],
       hasError: true,
-      errorMessage: error instanceof Error ? error.message : 'Unknown error occurred'
+      errorMessage: getErrorMessage(error)
     };
   }
 }
